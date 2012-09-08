@@ -72,7 +72,7 @@ IMPLICIT NONE
 	!$OMP PARALLEL DEFAULT(NONE)&
 	!$OMP& SHARED(totalrange,temp,success,fail,scaling,nmax,delta)&
 	!$OMP& PRIVATE(ceilsuccess,ceilfail,joint,boxnumb)
-	!$OMP DO SCHEDULE(GUIDED)
+	!$OMP DO SCHEDULE(STATIC)
 do1:	DO i=1,nmax
 		IF(delta(i)>1) THEN
 			temp(i,1) = delta(i)

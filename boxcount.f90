@@ -421,7 +421,7 @@ IMPLICIT NONE
 	!Renormalize
 
 	!$OMP PARALLEL SHARED(list,minelt,k)
-	!$OMP DO SCHEDULE(DYNAMIC)
+	!$OMP DO SCHEDULE(STATIC)
 		DO l=1,SIZE(list,1)
 			list(l,k)=list(l,k)-minelt(k)
 			list(l,k)=list(l,k)/totalrange(k)
@@ -447,7 +447,7 @@ IMPLICIT NONE
 	!$OMP PARALLEL DEFAULT(NONE)&
 	!$OMP& SHARED(totalrange,temp,list,scaling,nmax,delta)&
 	!$OMP& PRIVATE(ceillist,boxnumb)
-	!$OMP DO SCHEDULE(GUIDED)
+	!$OMP DO SCHEDULE(STATIC)
 do1:	DO i=1,nmax
 		IF(delta(i)>1) THEN
 			temp(i,1) = delta(i)
