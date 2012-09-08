@@ -25,10 +25,6 @@ IMPLICIT NONE
 doi1:	DO i=1,length_s+1
 		check = check + 1
 		READ(20,END=10) (success(i,j), j=1,width_s)
-IF (mod(check,1000000)==0) THEN
-        PRINT*,	"SUCCESS",check
-	PRINT*, (success(i,j),j=1,width_s)
-END IF
 		IF(check==SIZE(success,1)) EXIT doi1
 	END DO	doi1
 
@@ -38,10 +34,6 @@ END IF
 doi2:	DO i=1,length_f+1
 		check = check + 1
 		READ(21,END=20) (fail(i,j),j=1,width_f)
-IF (mod(check,1000000)==0) THEN
-        PRINT*, "FAIL",check
-        PRINT*,	(fail(i,j),j=1,width_f)
-END IF
 		IF(check==SIZE(fail,1)) EXIT doi2
 	END DO	doi2
 
