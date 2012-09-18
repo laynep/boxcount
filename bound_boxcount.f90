@@ -1,7 +1,8 @@
-MODULE boundaryboxcount
-USE sorters
+module boundaryboxcount
+  use types, only : dp
+  use sorters
 
-CONTAINS
+contains
 
 !***************************************************************************************
 
@@ -11,118 +12,118 @@ CONTAINS
 
 !NOTE: the list put into boxcount requires it to be sorted from low to high in first column.
 
-SUBROUTINE bound_boxcount(success,fail,minim,temp)
-IMPLICIT NONE
+subroutine bound_boxcount(success,fail,minim,temp)
+implicit none
 
-	DOUBLE PRECISION, DIMENSION(:,:), INTENT(INOUT) :: success, fail
-	INTEGER, DIMENSION(:,:), ALLOCATABLE :: ceilsuccess, ceilfail, joint
-	DOUBLE PRECISION, INTENT(IN) :: minim
-	DOUBLE PRECISION :: scaling, m, p, d, epsilon_0
-	DOUBLE PRECISION, DIMENSION(SIZE(success,2)) :: maxelt, minelt, totalrange
-	INTEGER :: i,i_1,j,k,l,l_1,k_1, boxnumb
-	INTEGER :: nmax
-	DOUBLE PRECISION, DIMENSION(:,:), INTENT(OUT), ALLOCATABLE :: temp
-	DOUBLE PRECISION, DIMENSION(:), ALLOCATABLE :: delta
-	LOGICAL :: same
+	real(dp), dimension(:,:), intent(inout) :: success, fail
+	integer, dimension(:,:), allocatable :: ceilsuccess, ceilfail, joint
+	real(dp), intent(in) :: minim
+	real(dp) :: scaling, m, p, d, epsilon_0
+	real(dp), dimension(size(success,2)) :: maxelt, minelt, totalrange
+	integer :: i,i_1,j,k,l,l_1,k_1, boxnumb
+	integer :: nmax
+	real(dp), dimension(:,:), intent(out), allocatable :: temp
+	real(dp), dimension(:), allocatable :: delta
+	logical :: same
 
-	!Sort the table's first column.
-	CALL heapsort(success)
-	CALL heapsort(fail)
+	!sort the table's first column.
+	call heapsort(success)
+	call heapsort(fail)
 
-	m = DBLE(SIZE(success,1)+SIZE(fail,1))
-	d = DBLE(SIZE(success,2)+SIZE(fail,2))
-	p = 200D0	!Number of desired steps in "linear" regime.
-	scaling = m**(-1D0/(p*d))
+	m = dble(size(success,1)+size(fail,1))
+	d = dble(size(success,2)+size(fail,2))
+	p = 200_dp	!number of desired steps in "linear" regime.
+	scaling = m**(-1_dp/(p*d))
 
-	DO j=1,SIZE(success,2)
-		maxelt(j)=MAX(findmax_d(success,j),findmax_d(fail,j))
-		minelt(j)=MIN(findmin_d(success,j),findmin_d(fail,j))
+	do j=1,size(success,2)
+		maxelt(j)=max(findmax_d(success,j),findmax_d(fail,j))
+		minelt(j)=min(findmin_d(success,j),findmin_d(fail,j))
 		totalrange(j)=maxelt(j)-minelt(j)
-	END DO
+	end do
 
-	!Renormalize
-	DO l=1,SIZE(success,1)
-		DO k=1,SIZE(success,2)
+	!renormalize
+	do l=1,size(success,1)
+		do k=1,size(success,2)
 			success(l,k)=success(l,k)-minelt(k)
 			success(l,k)=success(l,k)/totalrange(k)
-		END DO
-	END DO
-	DO l_1=1,SIZE(fail,1)
-		DO k_1=1,SIZE(fail,2)
+		end do
+	end do
+	do l_1=1,size(fail,1)
+		do k_1=1,size(fail,2)
 			fail(l_1,k_1)=fail(l_1,k_1)-minelt(k_1)
 			fail(l_1,k_1)=fail(l_1,k_1)/totalrange(k_1)
-		END DO
-	END DO
+		end do
+	end do
 
-	epsilon_0=4D0
-	nmax=ABS(CEILING(LOG(minim/epsilon_0)/LOG(scaling)))
+	epsilon_0=4_dp
+	nmax=abs(ceiling(log(minim/epsilon_0)/log(scaling)))
 
-	ALLOCATE(delta(nmax))
+	allocate(delta(nmax))
 
-	DO i_1=1,nmax	
-	delta(i_1) = epsilon_0*(scaling**(i_1-1D0))
-	END DO
+	do i_1=1,nmax	
+	delta(i_1) = epsilon_0*(scaling**(i_1-1_dp))
+	end do
 	
 
-	ALLOCATE(temp(nmax,2))
+	allocate(temp(nmax,2))
 
 
-	PRINT*,"Box Dimension	","   Number of boxes"
+	print*,"Box Dimension	","   Number of boxes"
 	
 	!$OMP PARALLEL DEFAULT(NONE)&
 	!$OMP& SHARED(totalrange,temp,success,fail,scaling,nmax,delta)&
 	!$OMP& PRIVATE(ceilsuccess,ceilfail,joint,boxnumb)
 	!$OMP DO SCHEDULE(STATIC)
-do1:	DO i=1,nmax
-		IF(delta(i)>1) THEN
+do1:	do i=1,nmax
+		if(delta(i)>1) then
 			temp(i,1) = delta(i)
 			temp(i,2) = 1
-			PRINT*,temp(i,1), temp(i,2)
-			CYCLE
-		END IF
+			print*,temp(i,1), temp(i,2)
+			cycle
+		end if
 
 		
-		ALLOCATE(ceilsuccess(SIZE(success,1),SIZE(success,2)))
-		ALLOCATE(ceilfail(SIZE(fail,1),SIZE(fail,2)))
-		ceilsuccess = CEILING(success/delta(i))
-		ceilfail = CEILING(fail/delta(i))
+		allocate(ceilsuccess(size(success,1),size(success,2)))
+		allocate(ceilfail(size(fail,1),size(fail,2)))
+		ceilsuccess = ceiling(success/delta(i))
+		ceilfail = ceiling(fail/delta(i))
 
 				
 	!!!!!VERY IMPORTANT FOR FUNCTION UNIQ_ELTS.!!!!!	
 	!Sorts the rest of the table.
-		IF(SIZE(success,2)>1)THEN
-			CALL heapsorttotal(ceilsuccess)
-		END IF
-		IF(SIZE(fail,2)>1)THEN
-			CALL heapsorttotal(ceilfail)
-		END IF
+		if(size(success,2)>1)then
+			call heapsorttotal(ceilsuccess)
+		end if
+		if(size(fail,2)>1)then
+			call heapsorttotal(ceilfail)
+		end if
 
-		CALL INTERSECT(ceilsuccess,ceilfail,joint)
+		call intersect(ceilsuccess,ceilfail,joint)
 
-		IF(SIZE(joint,1)==0) THEN
+		if(size(joint,1)==0) then
 			temp(i,1) = delta(i)
-			temp(i,2) = 0D0
-			DEALLOCATE(ceilsuccess,ceilfail)
-			CYCLE do1
-		END IF
+			temp(i,2) = 0_dp
+			deallocate(ceilsuccess,ceilfail)
+			cycle do1
+		end if
 		
-		!Count all unique elements.  
+		!count all unique elements.  
 		boxnumb = uniq_elts(joint)
 
-		DEALLOCATE(ceilsuccess,ceilfail)
+		deallocate(ceilsuccess,ceilfail)
 
 		temp(i,1) = delta(i)
-		temp(i,2) = DBLE(boxnumb)
+		temp(i,2) = dble(boxnumb)
 
-		PRINT*,temp(i,1), temp(i,2)
-	END DO do1
-	!$OMP END DO
-	!$OMP END PARALLEL
+		print*,temp(i,1), temp(i,2)
+	end do do1
+	!$omp end do
+	!$omp end parallel
 
-	DEALLOCATE(delta)
+	deallocate(delta)
 
 		
-END SUBROUTINE bound_boxcount
+end subroutine bound_boxcount
 
 
 
@@ -132,170 +133,170 @@ END SUBROUTINE bound_boxcount
 !Requires list to be sorted by HEAPSORTTOTAL from SORTERS module.
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-INTEGER FUNCTION uniq_elts(list)
-IMPLICIT NONE
+integer function uniq_elts(list)
+implicit none
 
-	INTEGER, DIMENSION(:,:), INTENT(INOUT) :: list
-	INTEGER :: j
-	LOGICAL :: same
+	integer, dimension(:,:), intent(inout) :: list
+	integer :: j
+	logical :: same
 
 	uniq_elts=1
 
-	IF(SIZE(list,1)==1) RETURN
+	if(size(list,1)==1) return
 
 	
-do2:	DO j=2,SIZE(list,1)
-		same = equalcond(SIZE(list,2),j,j-1,list)
-		IF(same .EQV. .FALSE.) THEN
+do2:	do j=2,size(list,1)
+		same = equalcond(size(list,2),j,j-1,list)
+		if(same .eqv. .false.) then
 			uniq_elts = uniq_elts+1
-		END IF
-	END DO do2
+		end if
+	end do do2
 
-END FUNCTION uniq_elts
+end function uniq_elts
 
 !*********************************************************
 !SUBROUTINE to find the intersection of two integer tables, table1 and table2.  Gives the result as joint, which will be the intersection of the two tables.
 
 !NOTE: this requires that the table1 and table2 be totally sorted, ascending.  Else, could use technique as in boundary_finder.
 
-SUBROUTINE INTERSECT(table1,table2,joint)
-IMPLICIT NONE
+subroutine intersect(table1,table2,joint)
+implicit none
 
-	INTEGER, DIMENSION(:,:), INTENT(IN) :: table1, table2
-	INTEGER, DIMENSION(:,:), INTENT(OUT), ALLOCATABLE :: joint
-	LOGICAL, DIMENSION(SIZE(table1,1)) :: indexer
-	INTEGER :: i_1, i_2, j_1, j_2, j_3, counter, start
-	LOGICAL :: same, ending
+	integer, dimension(:,:), intent(in) :: table1, table2
+	integer, dimension(:,:), intent(out), allocatable :: joint
+	logical, dimension(size(table1,1)) :: indexer
+	integer :: i_1, i_2, j_1, j_2, j_3, counter, start
+	logical :: same, ending
 
-	indexer = .FALSE.
+	indexer = .false.
 	counter = 0
 	start = 1
-	same = .FALSE.
-	ending = .FALSE.
+	same = .false.
+	ending = .false.
 
-doi1:	DO i_1=1,SIZE(table1,1)
-	doj3:	DO j_3=1,SIZE(table1,2)
-			IF(i_1>1 .AND. table1(i_1,j_3)==table1(i_1-1,j_3)) THEN
-				same = .TRUE.
-			ELSE
-				same = .FALSE.
-				EXIT doj3
-			END IF
-		END DO doj3
+doi1:	do i_1=1,size(table1,1)
+	doj3:	do j_3=1,size(table1,2)
+			if(i_1>1 .and. table1(i_1,j_3)==table1(i_1-1,j_3)) then
+				same = .true.
+			else
+				same = .false.
+				exit doj3
+			end if
+		end do doj3
 	
-		IF(i_1>1 .AND. same.EQV..TRUE.) THEN
+		if(i_1>1 .and. same.eqv..true.) then
 			indexer(i_1) = indexer(i_1-1)
-			IF(indexer(i_1).EQV..TRUE.) THEN
+			if(indexer(i_1).eqv..true.) then
 				counter = counter + 1
-			END IF
-			CYCLE
-		END IF
+			end if
+			cycle
+		end if
 
-	doj2:	DO j_2=start,SIZE(table2,1)
-		doj1:	DO j_1=1,SIZE(table2,2)
-				IF(table1(i_1,j_1)==table2(j_2,j_1)) THEN
-					indexer(i_1) = .TRUE.
-				END IF
-				IF(table1(i_1,j_1)>table2(j_2,j_1)) THEN
-					indexer(i_1) = .FALSE.
+	doj2:	do j_2=start,size(table2,1)
+		doj1:	do j_1=1,size(table2,2)
+				if(table1(i_1,j_1)==table2(j_2,j_1)) then
+					indexer(i_1) = .true.
+				end if
+				if(table1(i_1,j_1)>table2(j_2,j_1)) then
+					indexer(i_1) = .false.
 					start = j_2
-					EXIT doj1
-				END IF
-				IF (table1(i_1,j_1)<table2(j_2,j_1)) THEN
+					exit doj1
+				end if
+				if (table1(i_1,j_1)<table2(j_2,j_1)) then
 					!start = j_2 -1
-					indexer(i_1) = .FALSE.
-					ending = .TRUE.
-					EXIT doj1
-				END IF
-			END DO doj1
-			IF(indexer(i_1).EQV..TRUE.) THEN
+					indexer(i_1) = .false.
+					ending = .true.
+					exit doj1
+				end if
+			end do doj1
+			if(indexer(i_1).eqv..true.) then
 				counter = counter + 1
 				!start = j_2
-				EXIT doj2
-			END IF
-			IF(ending .EQV. .TRUE.) THEN
-				ending = .FALSE.
-				EXIT doj2
-			END IF
-		END DO doj2
-	END DO doi1
+				exit doj2
+			end if
+			if(ending .eqv. .true.) then
+				ending = .false.
+				exit doj2
+			end if
+		end do doj2
+	end do doi1
 
-!PRINT*,"COUNTER",counter
+!print*,"counter",counter
 
 
-	ALLOCATE(joint(counter,SIZE(table1,2)))
+	allocate(joint(counter,size(table1,2)))
 
-	IF (counter == 0) RETURN
+	if (counter == 0) return
 
 	counter = 0
-doi2:	DO i_2=1,SIZE(table1,1)
-		IF(indexer(i_2).EQV. .TRUE.) THEN
+doi2:	do i_2=1,size(table1,1)
+		if(indexer(i_2).eqv. .true.) then
 			counter = counter + 1
 			joint(counter,:)=table1(i_2,:)
-		END IF
-	END DO doi2
+		end if
+	end do doi2
 
 
-END SUBROUTINE INTERSECT
+end subroutine intersect
 
 !********************************************************
 !Function to find minimum of a real NxN array in the ith column.
 
-DOUBLE PRECISION FUNCTION findmin_d(array,i)
-IMPLICIT NONE
+real(dp) function findmin_d(array,i)
+implicit none
 
-	DOUBLE PRECISION,DIMENSION(:,:) :: array
-	INTEGER :: i
-	DOUBLE PRECISION, DIMENSION(SIZE(array,1)) :: col
-	INTEGER :: j
+	real(dp),dimension(:,:) :: array
+	integer :: i
+	real(dp), dimension(size(array,1)) :: col
+	integer :: j
 
-	DO j=1,SIZE(array,1)
+	do j=1,size(array,1)
 		col(j)=array(j,i)
-	END DO
+	end do
 
-	findmin_d = MINVAL(col)
+	findmin_d = minval(col)
 
-END FUNCTION findmin_d
+end function findmin_d
 
 !********************************************************
 !Function to find maximum of a real NxN array in the ith column.
 
-DOUBLE PRECISION FUNCTION findmax_d(array,i)
-IMPLICIT NONE
+real(dp) function findmax_d(array,i)
+implicit none
 
-	DOUBLE PRECISION,DIMENSION(:,:) :: array
-	INTEGER :: i
-	DOUBLE PRECISION, DIMENSION(SIZE(array,1)) :: col
-	INTEGER :: j
+	real(dp),dimension(:,:) :: array
+	integer :: i
+	real(dp), dimension(size(array,1)) :: col
+	integer :: j
 
-	DO j=1,SIZE(array,1)
+	do j=1,size(array,1)
 		col(j)=array(j,i)
-	END DO
+	end do
 
-	findmax_d = MAXVAL(col)
+	findmax_d = maxval(col)
 
-END FUNCTION findmax_d
+end function findmax_d
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !Sets random_seed() according to computer clock to give good random numbers.
 
 
-SUBROUTINE init_random_seed()
-            INTEGER :: i, n, clock
-            INTEGER, DIMENSION(:), ALLOCATABLE :: seed
+subroutine init_random_seed()
+            integer :: i, n, clock
+            integer, dimension(:), allocatable :: seed
 
           
-            CALL RANDOM_SEED(size = n)
-            ALLOCATE(seed(n))
+            call random_seed(size = n)
+            allocate(seed(n))
           
-            CALL SYSTEM_CLOCK(COUNT=clock)
+            call system_clock(count=clock)
           
             seed = clock + 37 * (/ (i - 1, i = 1, n) /)
-            CALL RANDOM_SEED(PUT = seed)
+            call random_seed(put = seed)
           
-            DEALLOCATE(seed)
-END SUBROUTINE init_random_seed
+            deallocate(seed)
+end subroutine init_random_seed
 
 
-END MODULE boundaryboxcount
+end module boundaryboxcount
 
