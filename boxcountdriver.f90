@@ -12,7 +12,7 @@
 
 program boxcountdriver
   use box_count
-  use sorters
+  use sorters, only : heapsort
   use types, only : dp
   use features, only : newunit
   implicit none
