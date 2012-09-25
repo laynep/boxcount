@@ -1,6 +1,6 @@
 module box_count
   use types, only : dp
-  use sorters
+  use sorters, only : heapsort, equalcond
   implicit none
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -24,6 +24,12 @@ module box_count
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+
+!Private variable.
+logical, private, parameter :: bxprinting=.true.
+
+
+
 interface boxcount
   module procedure boxcount_dp
   module procedure bound_boxcount
@@ -31,6 +37,385 @@ end interface
 
 
 contains
+
+
+
+!***************************************************************************************
+
+!Performs the boxcount on an n x m dimensional list of n points (x_1,...,x_m).  It first sorts this data, then rescales it according to the grid size.  It then finds how many boxes it takes to cover the set by doing the CEILING count below and identifying the unique elements.
+
+!Output is the array temp(x,2) of points (delta,N) according to the input scaling.
+
+!NOTE: the list put into boxcount requires it to be sorted from low to high in first column.
+
+subroutine boxcount_dp(list,minim,temp)
+	implicit none
+
+	real(dp), dimension(:,:), intent(inout) :: list
+	integer, dimension(:,:), allocatable :: ceillist
+	real(dp), intent(in) :: minim
+	real(dp) :: scaling, m, p, d, epsilon_0
+	real(dp), dimension(size(list,2)) :: maxelt, minelt, totalrange
+	integer :: i,i_1,j,k,l, boxnumb
+	integer :: nmax
+	real(dp), dimension(:,:), intent(out), allocatable :: temp
+	real(dp), dimension(:), allocatable :: delta
+	logical :: same
+
+	!sort the table's first column.
+	call heapsort(list)
+
+	m = dble(size(list,1))
+	d= dble(size(list,2))
+	p = 200_dp	!number of desired steps in "linear" regime.
+	scaling = m**(-1_dp/(p*d))
+
+	do j=1,size(list,2)
+		maxelt(j)=findmax(list,j)
+		minelt(j)=findmin(list,j)
+		totalrange(j)=maxelt(j)-minelt(j)
+	end do
+
+	do k=1,size(list,2)
+
+	!renormalize
+
+	!$OMP PARALLEL SHARED(LIST,MINELT,K)
+	!$OMP DO SCHEDULE(STATIC)
+		do l=1,size(list,1)
+			list(l,k)=list(l,k)-minelt(k)
+			list(l,k)=list(l,k)/totalrange(k)
+		end do
+	!$OMP END DO
+	!$OMP END PARALLEL
+	end do
+
+	epsilon_0=4_dp
+	nmax=abs(ceiling(log(minim/epsilon_0)/log(scaling)))
+
+	allocate(delta(nmax))
+	do i_1=1,nmax	
+	delta(i_1) = epsilon_0*(scaling**(i_1-1_dp))
+	end do
+	
+
+	allocate(temp(nmax,2))
+
+
+	if (bxprinting) print*,"box dimension	","   number of boxes"
+	
+	!$OMP PARALLEL DEFAULT(NONE)&
+	!$OMP& SHARED(TOTALRANGE,TEMP,LIST,SCALING,NMAX,DELTA)&
+	!$OMP& PRIVATE(CEILLIST,BOXNUMB)
+	!$OMP DO SCHEDULE(STATIC)
+do1:	do i=1,nmax
+		if(delta(i)>1) then
+			temp(i,1) = delta(i)
+			temp(i,2) = 1
+			if (bxprinting) print*,temp(i,1), temp(i,2)
+			cycle
+		end if
+		
+		
+		allocate(ceillist(size(list,1),size(list,2)))
+		ceillist = ceiling(list/delta(i))
+
+				
+	!!!!!very important for function uniq_elts.!!!!!	
+	!sorts the rest of the table.
+		if(size(list,2)>1)then
+			call heapsort(ceillist)
+		end if
+
+		!count all unique elements.  
+		boxnumb = uniq_elts(ceillist)
+
+		deallocate(ceillist)
+
+		temp(i,1) = delta(i)
+		temp(i,2) = dble(boxnumb)
+
+		if (bxprinting) print*,temp(i,1), temp(i,2)
+	end do do1
+	!$OMP END DO
+	!$OMP END PARALLEL
+
+	deallocate(delta)
+
+		
+end subroutine boxcount_dp
+
+!***************************************************************************************
+
+!Performs the boxcount on an n x m dimensional list of n points (x_1,...,x_m).  It first sorts this data, then rescales it according to the grid size.  It then finds how many boxes it takes to cover the set by doing the CEILING count below and identifying the unique elements.
+
+!Output is the array temp(x,2) of points (delta,N) according to the input scaling.
+
+!NOTE: the list put into boxcount requires it to be sorted from low to high in first column.
+
+subroutine bound_boxcount(success,fail,minim,temp)
+	implicit none
+
+	real(dp), dimension(:,:), intent(inout) :: success, fail
+	integer, dimension(:,:), allocatable :: ceilsuccess, ceilfail, joint
+	real(dp), intent(in) :: minim
+	real(dp) :: scaling, m, p, d, epsilon_0
+	real(dp), dimension(size(success,2)) :: maxelt, minelt, totalrange
+	integer :: i,i_1,j,k,l,l_1,k_1, boxnumb
+	integer :: nmax
+	real(dp), dimension(:,:), intent(out), allocatable :: temp
+	real(dp), dimension(:), allocatable :: delta
+	logical :: same
+
+	!sort the table's first column.
+	call heapsort(success)
+	call heapsort(fail)
+
+	m = dble(size(success,1)+size(fail,1))
+	d = dble(size(success,2)+size(fail,2))
+	p = 200_dp	!number of desired steps in "linear" regime.
+	scaling = m**(-1_dp/(p*d))
+
+	do j=1,size(success,2)
+		maxelt(j)=max(findmax(success,j),findmax(fail,j))
+		minelt(j)=min(findmin(success,j),findmin(fail,j))
+		totalrange(j)=maxelt(j)-minelt(j)
+	end do
+
+	!renormalize
+	do l=1,size(success,1)
+		do k=1,size(success,2)
+			success(l,k)=success(l,k)-minelt(k)
+			success(l,k)=success(l,k)/totalrange(k)
+		end do
+	end do
+	do l_1=1,size(fail,1)
+		do k_1=1,size(fail,2)
+			fail(l_1,k_1)=fail(l_1,k_1)-minelt(k_1)
+			fail(l_1,k_1)=fail(l_1,k_1)/totalrange(k_1)
+		end do
+	end do
+
+	epsilon_0=4_dp
+	nmax=abs(ceiling(log(minim/epsilon_0)/log(scaling)))
+
+	allocate(delta(nmax))
+
+	do i_1=1,nmax	
+	delta(i_1) = epsilon_0*(scaling**(i_1-1_dp))
+	end do
+	
+
+	allocate(temp(nmax,2))
+
+
+	if (bxprinting) print*,"Box Dimension	","   Number of boxes"
+	
+	!$OMP PARALLEL DEFAULT(NONE)&
+	!$OMP& SHARED(totalrange,temp,success,fail,scaling,nmax,delta)&
+	!$OMP& PRIVATE(ceilsuccess,ceilfail,joint,boxnumb)
+	!$OMP DO SCHEDULE(STATIC)
+do1:	do i=1,nmax
+		if(delta(i)>1) then
+			temp(i,1) = delta(i)
+			temp(i,2) = 1
+			if (bxprinting) print*,temp(i,1), temp(i,2)
+			cycle
+		end if
+
+		
+		allocate(ceilsuccess(size(success,1),size(success,2)))
+		allocate(ceilfail(size(fail,1),size(fail,2)))
+		ceilsuccess = ceiling(success/delta(i))
+		ceilfail = ceiling(fail/delta(i))
+
+				
+	!!!!!VERY IMPORTANT FOR FUNCTION UNIQ_ELTS.!!!!!	
+	!Sorts the rest of the table.
+		if(size(success,2)>1)then
+			call heapsort(ceilsuccess)
+		end if
+		if(size(fail,2)>1)then
+			call heapsort(ceilfail)
+		end if
+
+		call intersect(ceilsuccess,ceilfail,joint)
+
+		if(size(joint,1)==0) then
+			temp(i,1) = delta(i)
+			temp(i,2) = 0_dp
+			deallocate(ceilsuccess,ceilfail)
+			cycle do1
+		end if
+		
+		!count all unique elements.  
+		boxnumb = uniq_elts(joint)
+
+		deallocate(ceilsuccess,ceilfail)
+
+		temp(i,1) = delta(i)
+		temp(i,2) = dble(boxnumb)
+
+		if (bxprinting) print*,temp(i,1), temp(i,2)
+	end do do1
+	!$omp end do
+	!$omp end parallel
+
+	deallocate(delta)
+
+		
+end subroutine bound_boxcount
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!Count the number of unique elements of an ordered integer table.  
+
+!Requires list to be sorted by HEAPSORTTOTAL from SORTERS module.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+integer function uniq_elts(list)
+	implicit none
+
+	integer, dimension(:,:), intent(inout) :: list
+	integer :: j
+	logical :: same
+
+	uniq_elts=1
+
+	if(size(list,1)==1) return
+
+	
+do2:	do j=2,size(list,1)
+		same = equalcond(size(list,2),j,j-1,list)
+		if(same .eqv. .false.) then
+			uniq_elts = uniq_elts+1
+		end if
+	end do do2
+
+end function uniq_elts
+
+!*********************************************************
+!SUBROUTINE to find the intersection of two integer tables, table1 and table2.  Gives the result as joint, which will be the intersection of the two tables.
+
+!NOTE: this requires that the table1 and table2 be totally sorted, ascending.  Else, could use technique as in boundary_finder.
+
+subroutine intersect(table1,table2,joint)
+	implicit none
+
+	integer, dimension(:,:), intent(in) :: table1, table2
+	integer, dimension(:,:), intent(out), allocatable :: joint
+	logical, dimension(size(table1,1)) :: indexer
+	integer :: i_1, i_2, j_1, j_2, j_3, counter, start
+	logical :: same, ending
+
+	indexer = .false.
+	counter = 0
+	start = 1
+	same = .false.
+	ending = .false.
+
+doi1:	do i_1=1,size(table1,1)
+	doj3:	do j_3=1,size(table1,2)
+			if(i_1>1 .and. table1(i_1,j_3)==table1(i_1-1,j_3)) then
+				same = .true.
+			else
+				same = .false.
+				exit doj3
+			end if
+		end do doj3
+	
+		if(i_1>1 .and. same.eqv..true.) then
+			indexer(i_1) = indexer(i_1-1)
+			if(indexer(i_1).eqv..true.) then
+				counter = counter + 1
+			end if
+			cycle
+		end if
+
+	doj2:	do j_2=start,size(table2,1)
+		doj1:	do j_1=1,size(table2,2)
+				if(table1(i_1,j_1)==table2(j_2,j_1)) then
+					indexer(i_1) = .true.
+				end if
+				if(table1(i_1,j_1)>table2(j_2,j_1)) then
+					indexer(i_1) = .false.
+					start = j_2
+					exit doj1
+				end if
+				if (table1(i_1,j_1)<table2(j_2,j_1)) then
+					!start = j_2 -1
+					indexer(i_1) = .false.
+					ending = .true.
+					exit doj1
+				end if
+			end do doj1
+			if(indexer(i_1).eqv..true.) then
+				counter = counter + 1
+				!start = j_2
+				exit doj2
+			end if
+			if(ending .eqv. .true.) then
+				ending = .false.
+				exit doj2
+			end if
+		end do doj2
+	end do doi1
+
+	allocate(joint(counter,size(table1,2)))
+
+	if (counter == 0) return
+
+	counter = 0
+doi2:	do i_2=1,size(table1,1)
+		if(indexer(i_2).eqv. .true.) then
+			counter = counter + 1
+			joint(counter,:)=table1(i_2,:)
+		end if
+	end do doi2
+
+
+end subroutine intersect
+
+
+
+!********************************************************
+!Function to find minimum of a real NxN array in the ith column.
+
+real(dp) function findmin(array,i)
+	implicit none
+
+	real(dp),dimension(:,:) :: array
+	integer :: i
+	real(dp), dimension(size(array,1)) :: col
+	integer :: j
+
+	do j=1,size(array,1)
+		col(j)=array(j,i)
+	end do
+
+	findmin = minval(col)
+
+end function findmin
+
+!********************************************************
+!Function to find maximum of a real NxN array in the ith column.
+
+real(dp) function findmax(array,i)
+	implicit none
+
+	real(dp),dimension(:,:) :: array
+	integer :: i
+	real(dp), dimension(size(array,1)) :: col
+	integer :: j
+
+	do j=1,size(array,1)
+		col(j)=array(j,i)
+	end do
+
+	findmax = maxval(col)
+
+end function findmax
 
 !This subroutine calculates the fractal dimension after box counting has been performed.  It selects the points in the linear regime by finding the max and min values of log(N) and determining the "midpoint" of the dataset with respect to the log(N) direction.  It then systematically throws away datapoints from the end, plots it, and gives out the chi**2 value, until it's satisfied.
 
@@ -73,7 +458,7 @@ doj:	do j=1,n-1
 	dropr=0
 	dropl=0
 
-	print*, "type		", "chi**2		", "dimn		", "dev"
+	if (bxprinting) print*, "type		", "chi**2		", "dimn		", "dev"
 
 do1:	do l=0,n-5
 		size1 = n - dropr - dropl
@@ -86,7 +471,7 @@ do1:	do l=0,n-5
 
 		!fit least squares to linear area.
 		call leastsqr(linear,a,b,siga,sigb,chi2)
-		if(chi2<20) print*, "leastsqr: ",chi2, b, sigb
+		if(chi2<20 .and. bxprinting) print*, "leastsqr: ",chi2, b, sigb
 
 		if(chi2 < .01) then
 			fit = .true.
@@ -108,12 +493,12 @@ do1:	do l=0,n-5
 
 	end do do1
 
-	print*,"number of right drops ",dropr
-	print*,"number of left drops ",dropl
-	print*,"number of points used ",(n-dropr - dropl)
+	if (bxprinting) print*,"number of right drops ",dropr
+	if (bxprinting) print*,"number of left drops ",dropl
+	if (bxprinting) print*,"number of points used ",(n-dropr - dropl)
 
 	if(fit .eqv. .false.) then
-		print*,"error: couldn't find a fit within specified chi**2."
+		if (bxprinting) print*,"error: couldn't find a fit within specified chi**2."
 	end if
 
 
@@ -122,6 +507,7 @@ do1:	do l=0,n-5
 	dev = sigb
 
 end subroutine fractal_dimn
+
 
 !***********************************************************************************
 !Subroutine to fit a line (alpha + beta*x + error) by minimizing absolute deviation.  From http://jblevins.org/mirror/amiller/as132.f90 .
@@ -383,394 +769,6 @@ subroutine leastsqr(points,a,b,siga,sigb,chi2)
 	sigb = sigb*sigdat
 
 end subroutine leastsqr
-
-
-!***************************************************************************************
-
-!Performs the boxcount on an n x m dimensional list of n points (x_1,...,x_m).  It first sorts this data, then rescales it according to the grid size.  It then finds how many boxes it takes to cover the set by doing the CEILING count below and identifying the unique elements.
-
-!Output is the array temp(x,2) of points (delta,N) according to the input scaling.
-
-!NOTE: the list put into boxcount requires it to be sorted from low to high in first column.
-
-subroutine boxcount_dp(list,minim,temp)
-	implicit none
-
-	real(dp), dimension(:,:), intent(inout) :: list
-	integer, dimension(:,:), allocatable :: ceillist
-	real(dp), intent(in) :: minim
-	real(dp) :: scaling, m, p, d, epsilon_0
-	real(dp), dimension(size(list,2)) :: maxelt, minelt, totalrange
-	integer :: i,i_1,j,k,l, boxnumb
-	integer :: nmax
-	real(dp), dimension(:,:), intent(out), allocatable :: temp
-	real(dp), dimension(:), allocatable :: delta
-	logical :: same
-
-	!sort the table's first column.
-	call heapsort(list)
-
-	m = dble(size(list,1))
-	d= dble(size(list,2))
-	p = 200_dp	!number of desired steps in "linear" regime.
-	scaling = m**(-1_dp/(p*d))
-
-	do j=1,size(list,2)
-		maxelt(j)=findmax(list,j)
-		minelt(j)=findmin(list,j)
-		totalrange(j)=maxelt(j)-minelt(j)
-	end do
-
-	do k=1,size(list,2)
-
-	!renormalize
-
-	!$OMP PARALLEL SHARED(LIST,MINELT,K)
-	!$OMP DO SCHEDULE(STATIC)
-		do l=1,size(list,1)
-			list(l,k)=list(l,k)-minelt(k)
-			list(l,k)=list(l,k)/totalrange(k)
-		end do
-	!$OMP END DO
-	!$OMP END PARALLEL
-	end do
-
-	epsilon_0=4_dp
-	nmax=abs(ceiling(log(minim/epsilon_0)/log(scaling)))
-
-	allocate(delta(nmax))
-	do i_1=1,nmax	
-	delta(i_1) = epsilon_0*(scaling**(i_1-1_dp))
-	end do
-	
-
-	allocate(temp(nmax,2))
-
-
-	print*,"box dimension	","   number of boxes"
-	
-	!$OMP PARALLEL DEFAULT(NONE)&
-	!$OMP& SHARED(TOTALRANGE,TEMP,LIST,SCALING,NMAX,DELTA)&
-	!$OMP& PRIVATE(CEILLIST,BOXNUMB)
-	!$OMP DO SCHEDULE(STATIC)
-do1:	do i=1,nmax
-		if(delta(i)>1) then
-			temp(i,1) = delta(i)
-			temp(i,2) = 1
-			print*,temp(i,1), temp(i,2)
-			cycle
-		end if
-		
-		
-		allocate(ceillist(size(list,1),size(list,2)))
-		ceillist = ceiling(list/delta(i))
-
-				
-	!!!!!very important for function uniq_elts.!!!!!	
-	!sorts the rest of the table.
-		if(size(list,2)>1)then
-			call heapsorttotal(ceillist)
-		end if
-
-		!count all unique elements.  
-		boxnumb = uniq_elts(ceillist)
-
-		deallocate(ceillist)
-
-		temp(i,1) = delta(i)
-		temp(i,2) = dble(boxnumb)
-
-		print*,temp(i,1), temp(i,2)
-	end do do1
-	!$OMP END DO
-	!$OMP END PARALLEL
-
-	deallocate(delta)
-
-		
-end subroutine boxcount_dp
-
-!***************************************************************************************
-
-!Performs the boxcount on an n x m dimensional list of n points (x_1,...,x_m).  It first sorts this data, then rescales it according to the grid size.  It then finds how many boxes it takes to cover the set by doing the CEILING count below and identifying the unique elements.
-
-!Output is the array temp(x,2) of points (delta,N) according to the input scaling.
-
-!NOTE: the list put into boxcount requires it to be sorted from low to high in first column.
-
-subroutine bound_boxcount(success,fail,minim,temp)
-	implicit none
-
-	real(dp), dimension(:,:), intent(inout) :: success, fail
-	integer, dimension(:,:), allocatable :: ceilsuccess, ceilfail, joint
-	real(dp), intent(in) :: minim
-	real(dp) :: scaling, m, p, d, epsilon_0
-	real(dp), dimension(size(success,2)) :: maxelt, minelt, totalrange
-	integer :: i,i_1,j,k,l,l_1,k_1, boxnumb
-	integer :: nmax
-	real(dp), dimension(:,:), intent(out), allocatable :: temp
-	real(dp), dimension(:), allocatable :: delta
-	logical :: same
-
-	!sort the table's first column.
-	call heapsort(success)
-	call heapsort(fail)
-
-	m = dble(size(success,1)+size(fail,1))
-	d = dble(size(success,2)+size(fail,2))
-	p = 200_dp	!number of desired steps in "linear" regime.
-	scaling = m**(-1_dp/(p*d))
-
-	do j=1,size(success,2)
-		maxelt(j)=max(findmax(success,j),findmax(fail,j))
-		minelt(j)=min(findmin(success,j),findmin(fail,j))
-		totalrange(j)=maxelt(j)-minelt(j)
-	end do
-
-	!renormalize
-	do l=1,size(success,1)
-		do k=1,size(success,2)
-			success(l,k)=success(l,k)-minelt(k)
-			success(l,k)=success(l,k)/totalrange(k)
-		end do
-	end do
-	do l_1=1,size(fail,1)
-		do k_1=1,size(fail,2)
-			fail(l_1,k_1)=fail(l_1,k_1)-minelt(k_1)
-			fail(l_1,k_1)=fail(l_1,k_1)/totalrange(k_1)
-		end do
-	end do
-
-	epsilon_0=4_dp
-	nmax=abs(ceiling(log(minim/epsilon_0)/log(scaling)))
-
-	allocate(delta(nmax))
-
-	do i_1=1,nmax	
-	delta(i_1) = epsilon_0*(scaling**(i_1-1_dp))
-	end do
-	
-
-	allocate(temp(nmax,2))
-
-
-	print*,"Box Dimension	","   Number of boxes"
-	
-	!$OMP PARALLEL DEFAULT(NONE)&
-	!$OMP& SHARED(totalrange,temp,success,fail,scaling,nmax,delta)&
-	!$OMP& PRIVATE(ceilsuccess,ceilfail,joint,boxnumb)
-	!$OMP DO SCHEDULE(STATIC)
-do1:	do i=1,nmax
-		if(delta(i)>1) then
-			temp(i,1) = delta(i)
-			temp(i,2) = 1
-			print*,temp(i,1), temp(i,2)
-			cycle
-		end if
-
-		
-		allocate(ceilsuccess(size(success,1),size(success,2)))
-		allocate(ceilfail(size(fail,1),size(fail,2)))
-		ceilsuccess = ceiling(success/delta(i))
-		ceilfail = ceiling(fail/delta(i))
-
-				
-	!!!!!VERY IMPORTANT FOR FUNCTION UNIQ_ELTS.!!!!!	
-	!Sorts the rest of the table.
-		if(size(success,2)>1)then
-			call heapsorttotal(ceilsuccess)
-		end if
-		if(size(fail,2)>1)then
-			call heapsorttotal(ceilfail)
-		end if
-
-		call intersect(ceilsuccess,ceilfail,joint)
-
-		if(size(joint,1)==0) then
-			temp(i,1) = delta(i)
-			temp(i,2) = 0_dp
-			deallocate(ceilsuccess,ceilfail)
-			cycle do1
-		end if
-		
-		!count all unique elements.  
-		boxnumb = uniq_elts(joint)
-
-		deallocate(ceilsuccess,ceilfail)
-
-		temp(i,1) = delta(i)
-		temp(i,2) = dble(boxnumb)
-
-		print*,temp(i,1), temp(i,2)
-	end do do1
-	!$omp end do
-	!$omp end parallel
-
-	deallocate(delta)
-
-		
-end subroutine bound_boxcount
-
-
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!Count the number of unique elements of an ordered integer table.  
-
-!Requires list to be sorted by HEAPSORTTOTAL from SORTERS module.
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-integer function uniq_elts(list)
-	implicit none
-
-	integer, dimension(:,:), intent(inout) :: list
-	integer :: j
-	logical :: same
-
-	uniq_elts=1
-
-	if(size(list,1)==1) return
-
-	
-do2:	do j=2,size(list,1)
-		same = equalcond(size(list,2),j,j-1,list)
-		if(same .eqv. .false.) then
-			uniq_elts = uniq_elts+1
-		end if
-	end do do2
-
-end function uniq_elts
-
-!*********************************************************
-!SUBROUTINE to find the intersection of two integer tables, table1 and table2.  Gives the result as joint, which will be the intersection of the two tables.
-
-!NOTE: this requires that the table1 and table2 be totally sorted, ascending.  Else, could use technique as in boundary_finder.
-
-subroutine intersect(table1,table2,joint)
-	implicit none
-
-	integer, dimension(:,:), intent(in) :: table1, table2
-	integer, dimension(:,:), intent(out), allocatable :: joint
-	logical, dimension(size(table1,1)) :: indexer
-	integer :: i_1, i_2, j_1, j_2, j_3, counter, start
-	logical :: same, ending
-
-	indexer = .false.
-	counter = 0
-	start = 1
-	same = .false.
-	ending = .false.
-
-doi1:	do i_1=1,size(table1,1)
-	doj3:	do j_3=1,size(table1,2)
-			if(i_1>1 .and. table1(i_1,j_3)==table1(i_1-1,j_3)) then
-				same = .true.
-			else
-				same = .false.
-				exit doj3
-			end if
-		end do doj3
-	
-		if(i_1>1 .and. same.eqv..true.) then
-			indexer(i_1) = indexer(i_1-1)
-			if(indexer(i_1).eqv..true.) then
-				counter = counter + 1
-			end if
-			cycle
-		end if
-
-	doj2:	do j_2=start,size(table2,1)
-		doj1:	do j_1=1,size(table2,2)
-				if(table1(i_1,j_1)==table2(j_2,j_1)) then
-					indexer(i_1) = .true.
-				end if
-				if(table1(i_1,j_1)>table2(j_2,j_1)) then
-					indexer(i_1) = .false.
-					start = j_2
-					exit doj1
-				end if
-				if (table1(i_1,j_1)<table2(j_2,j_1)) then
-					!start = j_2 -1
-					indexer(i_1) = .false.
-					ending = .true.
-					exit doj1
-				end if
-			end do doj1
-			if(indexer(i_1).eqv..true.) then
-				counter = counter + 1
-				!start = j_2
-				exit doj2
-			end if
-			if(ending .eqv. .true.) then
-				ending = .false.
-				exit doj2
-			end if
-		end do doj2
-	end do doi1
-
-	allocate(joint(counter,size(table1,2)))
-
-	if (counter == 0) return
-
-	counter = 0
-doi2:	do i_2=1,size(table1,1)
-		if(indexer(i_2).eqv. .true.) then
-			counter = counter + 1
-			joint(counter,:)=table1(i_2,:)
-		end if
-	end do doi2
-
-
-end subroutine intersect
-
-
-
-!********************************************************
-!Function to find minimum of a real NxN array in the ith column.
-
-real(dp) function findmin(array,i)
-	implicit none
-
-	real(dp),dimension(:,:) :: array
-	integer :: i
-	real(dp), dimension(size(array,1)) :: col
-	integer :: j
-
-	do j=1,size(array,1)
-		col(j)=array(j,i)
-	end do
-
-	findmin = minval(col)
-
-end function findmin
-
-!********************************************************
-!Function to find maximum of a real NxN array in the ith column.
-
-real(dp) function findmax(array,i)
-	implicit none
-
-	real(dp),dimension(:,:) :: array
-	integer :: i
-	real(dp), dimension(size(array,1)) :: col
-	integer :: j
-
-	do j=1,size(array,1)
-		col(j)=array(j,i)
-	end do
-
-	findmax = maxval(col)
-
-end function findmax
-
-
-!********************************************************
-!Subroutine to implement the correlation dimension technique to find the fractal dimension of an object.  This involves finding the pointwise mass function and averaging to achieve the correlation integral.  Then the correlation dimension is found by taking the limit as r -> 0 in logC/logr.  
-
-!This subroutine will output the table temp(N,2) which catalogues the logC and logr in the columns.
-
-!This procedure is taken from Theiler public.lanl.gov/jt/Papers/est-fractal-dim.pdf
-
-
 
 
 
