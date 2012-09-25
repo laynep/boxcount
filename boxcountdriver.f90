@@ -1,46 +1,82 @@
-program boxcountdriver
-use boundaryboxcount
-use box_count
-use sorters
-use types, only : dp
-implicit none
+!A program that loads a success file named totalsucc.bin and a fail file named
+!totalfail.bin and performs a boxcounting procedure on a) the success set b) the
+!failure set c) the boundary between the two and d) the two combined together.
+!
+!Reads the array file sizes from a namelist stored in bxfilesizes.txt.
 
-	real(dp), dimension(:,:), allocatable :: success
+!Optionally takes in one set and box counts it at different resolutions.  In
+!other words, it loads a set and then box counts only portions of that set.
+!These portions steadily increase until the full resolution is counted.  This
+!allows us to determine at which resolution the fractal dimension stabilizes.
+
+
+program boxcountdriver
+  use boundaryboxcount
+  use box_count
+  use sorters
+  use types, only : dp
+  use features, only : newunit
+  implicit none
+
+	real(dp), dimension(:,:), allocatable :: success, subset
 	real(dp), dimension(:,:), allocatable :: fail
 	real(dp), dimension(:,:), allocatable :: temp, total
 	real(dp) :: epsilon_0, minim, dimn, dev, chi2
 	integer :: length_s, length_f, width_s, width_f, i, k,j, check
-	integer :: countboth
-	namelist /tablel/ length_s, length_f, width_s, width_f, countboth
+	integer :: ier, u, uu, high, iend
+  logical :: countboth, resol_count
+
+	namelist /tablel/ length_s, length_f, width_s, width_f, countboth, &
+  & resol_count, minim
 
 	!Reads file sizes from input file "bxfilesizes.txt".
-	open(unit=1000, file="bxfilesizes.txt", status="old", delim="apostrophe")
-	read(unit=1000, nml=tablel)
+	open(unit=newunit(u), file="bxfilesizes.txt", status="old", delim="apostrophe")
+	read(unit=u, nml=tablel)
+  close(u)
 	allocate(success(length_s,width_s),fail(length_f,width_f))
 
 	!Read succ and fail sets from file.
-	open(unit=20,status='old',file='totalsucc.bin',form='unformatted')
-	open(unit=21,status='old',file='totalfail.bin',form='unformatted')
-
+	open(unit=newunit(u),status='old',file='totalsucc.bin',form='unformatted')
 	check = 0
 doi1:	do i=1,length_s+1
 		check = check + 1
-		read(20,end=10) (success(i,j), j=1,width_s)
+		read(u,iostat=ier) (success(i,j), j=1,width_s)
 		if(check==size(success,1)) exit doi1
+    if (ier<0) exit doi1
 	end do	doi1
+  close(u)
 
-10	close(unit=20)
-
+	open(unit=newunit(u),status='old',file='totalfail.bin',form='unformatted')
 	check = 0
 doi2:	do i=1,length_f+1
 		check = check + 1
-		read(21,end=20) (fail(i,j),j=1,width_f)
+		read(u,iostat=ier) (fail(i,j),j=1,width_f)
 		if(check==size(fail,1)) exit doi2
+    if (ier<0) exit doi2
 	end do	doi2
+  close(u)
 
 	!Start boxcounting.
-20	minim = .0000001_dp
-	close(unit=21)
+  !-------------------------------------------------------------
+
+  if (resol_count) then
+    iend=10
+    do i=1,iend
+      !Count only a subset of the success set.
+      high=(size(success)/iend)*i  !Note int div.
+      print*,"Boxcounting resolution points ", high
+      subset(:,:)=success(1:high,:)
+      call boxcount(subset,minim,temp)
+      !Unit to write to.
+      uu=i+90
+      do j=1,size(temp,1)
+        write(unit=uu,fmt=*), temp(j,1), temp(j,2)
+      end do
+      deallocate(temp)
+      deallocate(subset)
+    end do
+    stop
+  end if
 
 
 	print*,"Boxcounting success..."
@@ -69,7 +105,7 @@ doi2:	do i=1,length_f+1
 	deallocate(temp)
 
 	!boxcount both if desired.
-	if (countboth==1) then
+	if (countboth) then
 		allocate(total(length_s+length_f,width_s))
 
 		do i=1,(length_s+length_f)

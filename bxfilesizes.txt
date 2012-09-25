@@ -1,0 +1,9 @@
+&tablel
+	length_s=,
+	length_f=,
+	width_s=4,
+	width_f=4,
+	countboth=.true.,
+  resol_count=.true.,
+  minim=1e-7
+/
