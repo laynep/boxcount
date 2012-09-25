@@ -11,7 +11,6 @@
 
 
 program boxcountdriver
-  use boundaryboxcount
   use box_count
   use sorters
   use types, only : dp
@@ -63,9 +62,11 @@ doi2:	do i=1,length_f+1
     iend=10
     do i=1,iend
       !Count only a subset of the success set.
-      high=(size(success)/iend)*i  !Note int div.
+      high=(size(success,1)/iend)*i  !Note int div.
       print*,"Boxcounting resolution points ", high
+      allocate(subset(high,size(success,2)))
       subset(:,:)=success(1:high,:)
+      print*,subset(1,1)
       call boxcount(subset,minim,temp)
       !Unit to write to.
       uu=i+90
@@ -98,7 +99,7 @@ doi2:	do i=1,length_f+1
 
 	print*,"Boxcounting boundary..."
 	open(unit=82, file="bxbound.82", status="new")
-	call bound_boxcount(success,fail,minim,temp)
+	call boxcount(success,fail,minim,temp)
 	do i=1,size(temp,1)
 		write(unit=82,fmt=*),temp(i,1),temp(i,2)
 	end do

@@ -1,9 +1,9 @@
 &tablel
-	length_s=,
-	length_f=,
+	length_s=100000,
+	length_f=100000,
 	width_s=4,
 	width_f=4,
 	countboth=.true.,
-  resol_count=.true.,
+  resol_count=.false.,
   minim=1e-7
 /
