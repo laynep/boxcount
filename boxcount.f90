@@ -1,8 +1,3 @@
-module box_count
-  use types, only : dp
-  use sorters, only : heapsort, equalcond
-  implicit none
-
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !Written by Layne Price, University of Auckland, May 2012
 !This is adapted from a number of articles written online about box-counting, as well as
@@ -24,16 +19,18 @@ module box_count
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+module box_count
+  use types, only : dp
+  use sorters, only : heapsort, equalcond
+  implicit none
 
-!Private variable.
-logical, private, parameter :: bxprinting=.true.
+  !Private variable.
+  logical, private, parameter :: bxprinting=.true.
 
-
-
-interface boxcount
-  module procedure boxcount_dp
-  module procedure bound_boxcount
-end interface
+  interface boxcount
+    module procedure boxcount_dp
+    module procedure bound_boxcount
+  end interface
 
 
 contains

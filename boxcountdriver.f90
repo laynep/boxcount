@@ -1,3 +1,7 @@
+!*******************************************************************************
+!Layne Price, University of Auckland, May 2012.
+!*******************************************************************************
+
 !A program that loads a success file named totalsucc.bin and a fail file named
 !totalfail.bin and performs a boxcounting procedure on a) the success set b) the
 !failure set c) the boundary between the two and d) the two combined together.
