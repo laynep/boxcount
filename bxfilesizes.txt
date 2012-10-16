@@ -5,5 +5,7 @@
 	width_f=4,
 	countboth=.true.,
   resol_count=.false.,
-  minim=1e-7
+  minim=1e-7,
+  success_file="totalsucc.bin",
+  fail_file="totalfail.bin"
 /

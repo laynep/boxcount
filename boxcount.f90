@@ -105,7 +105,7 @@ subroutine boxcount_dp(list,minim,temp)
 	!$OMP& SHARED(TOTALRANGE,TEMP,LIST,SCALING,NMAX,DELTA)&
 	!$OMP& PRIVATE(CEILLIST,BOXNUMB)
 	!$OMP DO SCHEDULE(STATIC)
-do1:	do i=1,nmax
+  do1:	do i=1,nmax
 		if(delta(i)>1) then
 			temp(i,1) = delta(i)
 			temp(i,2) = 1
@@ -212,7 +212,7 @@ subroutine bound_boxcount(success,fail,minim,temp)
 	!$OMP& SHARED(totalrange,temp,success,fail,scaling,nmax,delta)&
 	!$OMP& PRIVATE(ceilsuccess,ceilfail,joint,boxnumb)
 	!$OMP DO SCHEDULE(STATIC)
-do1:	do i=1,nmax
+  do1:	do i=1,nmax
 		if(delta(i)>1) then
 			temp(i,1) = delta(i)
 			temp(i,2) = 1
@@ -283,7 +283,7 @@ integer function uniq_elts(list)
 	if(size(list,1)==1) return
 
 	
-do2:	do j=2,size(list,1)
+  do2:	do j=2,size(list,1)
 		same = equalcond(size(list,2),j,j-1,list)
 		if(same .eqv. .false.) then
 			uniq_elts = uniq_elts+1
@@ -312,8 +312,8 @@ subroutine intersect(table1,table2,joint)
 	same = .false.
 	ending = .false.
 
-doi1:	do i_1=1,size(table1,1)
-	doj3:	do j_3=1,size(table1,2)
+  doi1:	do i_1=1,size(table1,1)
+	  doj3:	do j_3=1,size(table1,2)
 			if(i_1>1 .and. table1(i_1,j_3)==table1(i_1-1,j_3)) then
 				same = .true.
 			else
@@ -364,7 +364,7 @@ doi1:	do i_1=1,size(table1,1)
 	if (counter == 0) return
 
 	counter = 0
-doi2:	do i_2=1,size(table1,1)
+  doi2:	do i_2=1,size(table1,1)
 		if(indexer(i_2).eqv. .true.) then
 			counter = counter + 1
 			joint(counter,:)=table1(i_2,:)
@@ -444,7 +444,7 @@ subroutine fractal_dimn(counted,dimn,dev,chi2)
 	minim = 0_dp
 	averagey = (maxim-minim)*.8_dp !position at upper 80% of range.
 
-doj:	do j=1,n-1
+  doj:	do j=1,n-1
 		if(log_n(j)<=averagey .and. log_n(j+1)>averagey) then
 			averagex = log_d(j+1)
 			averagex_numb = j+1
@@ -457,7 +457,7 @@ doj:	do j=1,n-1
 
 	if (bxprinting) print*, "type		", "chi**2		", "dimn		", "dev"
 
-do1:	do l=0,n-5
+  do1:	do l=0,n-5
 		size1 = n - dropr - dropl
 		allocate(linear(size1,2))
 		

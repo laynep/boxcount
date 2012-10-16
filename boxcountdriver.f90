@@ -2,11 +2,12 @@
 !Layne Price, University of Auckland, May 2012.
 !*******************************************************************************
 
-!A program that loads a success file named totalsucc.bin and a fail file named
-!totalfail.bin and performs a boxcounting procedure on a) the success set b) the
+!A program that loads a success file named success_file and a fail file named
+!fail_file and performs a boxcounting procedure on a) the success set b) the
 !failure set c) the boundary between the two and d) the two combined together.
-!
-!Reads the array file sizes from a namelist stored in bxfilesizes.txt.
+
+!Reads the array file sizes and success and fail file names from a namelist
+!stored in bxfilesizes.txt.
 
 !Optionally takes in one set and box counts it at different resolutions.  In
 !other words, it loads a set and then box counts only portions of that set.
@@ -28,9 +29,10 @@ program boxcountdriver
 	integer :: length_s, length_f, width_s, width_f, i, k,j, check
 	integer :: ier, u, uu, high, iend
   logical :: countboth, resol_count
+  character(len=100) :: success_file, fail_file
 
 	namelist /tablel/ length_s, length_f, width_s, width_f, countboth, &
-  & resol_count, minim
+  & resol_count, minim, success_file, fail_file
 
 	!Reads file sizes from input file "bxfilesizes.txt".
 	open(unit=newunit(u), file="bxfilesizes.txt", status="old", delim="apostrophe")
@@ -39,9 +41,9 @@ program boxcountdriver
 	allocate(success(length_s,width_s),fail(length_f,width_f))
 
 	!Read succ and fail sets from file.
-	open(unit=newunit(u),status='old',file='totalsucc.bin',form='unformatted')
+	open(unit=newunit(u),status='old',file=success_file,form='unformatted')
 	check = 0
-doi1:	do i=1,length_s+1
+  doi1:	do i=1,length_s+1
 		check = check + 1
 		read(u,iostat=ier) (success(i,j), j=1,width_s)
 		if(check==size(success,1)) exit doi1
@@ -49,9 +51,9 @@ doi1:	do i=1,length_s+1
 	end do	doi1
   close(u)
 
-	open(unit=newunit(u),status='old',file='totalfail.bin',form='unformatted')
+	open(unit=newunit(u),status='old',file=fail_file,form='unformatted')
 	check = 0
-doi2:	do i=1,length_f+1
+  doi2:	do i=1,length_f+1
 		check = check + 1
 		read(u,iostat=ier) (fail(i,j),j=1,width_f)
 		if(check==size(fail,1)) exit doi2
